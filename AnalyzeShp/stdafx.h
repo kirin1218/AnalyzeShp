@@ -34,7 +34,9 @@
 #include <afxcontrolbars.h>     // MFC におけるリボンとコントロール バーのサポート
 
 
-
+#include <string>
+#include <vector>
+using namespace std;
 
 
 

@@ -153,11 +153,10 @@ HCURSOR CAnalyzeShpDlg::OnQueryDragIcon()
 	return static_cast<HCURSOR>(m_hIcon);
 }
 
-#include <string>
-#include <vector>
-#define DATA_DIR "C:\\FastSource\\AnalyzeShp\\Data\\SampleShp\\"
 
-using namespace std;
+#define DATA_DIR "D:\\Source\\AnalyzeShp\\Data\\SampleShp\\"
+
+
 
 typedef struct _SHP_FILE_HEADER {
 	DWORD dwFileCode;
@@ -183,6 +182,11 @@ typedef struct _RECODE_DATA {
 	DWORD dwRecordNo;
 	DWORD dwContentsLength;
 }RECODE_DATA,*PRECODE_DATA;
+
+typedef struct _RECODEIDX_DATA {
+	DWORD dwRecordOffset;
+	DWORD dwContentsLength;
+}RECODEIDX_DATA, *PRECODEIDX_DATA;
 
 BYTE* ReadData(BYTE* pCur, int bytesize, BYTE* pData, BOOL bBig)
 {
@@ -228,9 +232,8 @@ public:
 	vector<CPint*> vPoints;
 };
 
-void CAnalyzeShpDlg::OnBnClickedOk()
+void CAnalyzeShpDlg::AnalyzeShp( string strShpFile )
 {
-	string strShpFile;
 	HANDLE hFile = INVALID_HANDLE_VALUE;
 	SHP_FILE_HEADER header;
 	RECODE_DATA record;
@@ -238,8 +241,6 @@ void CAnalyzeShpDlg::OnBnClickedOk()
 	BYTE byteHeader[100];
 	BYTE byteRecord[8];
 	DWORD dwReadedSize;
-
-	strShpFile = DATA_DIR + string("japan_ver81.shp");
 
 	hFile = CreateFile(strShpFile.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 
@@ -274,12 +275,12 @@ void CAnalyzeShpDlg::OnBnClickedOk()
 
 			if (header.dwSharpType == 5) {
 				//コンテンツサイズ分読み込む
-				BYTE* pData = (BYTE*)LocalAlloc(LMEM_FIXED, record.dwContentsLength);
+				BYTE* pData = (BYTE*)LocalAlloc(LMEM_FIXED, record.dwContentsLength*2);
 				if (pData != NULL) {
 					int j;
 					CPolygon* pPolygon = new CPolygon();
 
-					ReadFile(hFile, pData, record.dwContentsLength, &dwReadedSize, NULL);
+					ReadFile(hFile, pData, record.dwContentsLength * 2, &dwReadedSize, NULL);
 
 					pCur = pData;
 					pCur = ReadData(pCur, 4, (PBYTE)&pPolygon->type, FALSE);
@@ -314,6 +315,87 @@ void CAnalyzeShpDlg::OnBnClickedOk()
 
 		CloseHandle(hFile);
 	}
+}
+
+
+void CAnalyzeShpDlg::AnalyzeShx(string strShxFile, string strShpFile)
+{
+	HANDLE hFile = INVALID_HANDLE_VALUE;
+	HANDLE hShxFile = INVALID_HANDLE_VALUE;
+
+
+
+	SHP_FILE_HEADER header;
+	RECODEIDX_DATA index;
+	RECODE_DATA record;
+	vector<RECODE_DATA> vRecord;
+	BYTE byteHeader[100];
+	BYTE byteRecord[8];
+	DWORD dwReadedSize;
+
+	hShxFile = CreateFile(strShxFile.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+
+	if (hShxFile != INVALID_HANDLE_VALUE) {
+
+		hFile = CreateFile(strShpFile.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+
+		if (hFile != INVALID_HANDLE_VALUE) {
+			ReadFile(hShxFile, byteHeader, sizeof(byteHeader), &dwReadedSize, NULL);
+
+			BYTE* pCur = byteHeader;
+
+			pCur = ReadData(pCur, 4, (PBYTE)&header.dwFileCode, TRUE);
+			pCur = ReadData(pCur, 4, (PBYTE)&header.dwNotUse1, TRUE);
+			pCur = ReadData(pCur, 4, (PBYTE)&header.dwNotUse2, TRUE);
+			pCur = ReadData(pCur, 4, (PBYTE)&header.dwNotUse3, TRUE);
+			pCur = ReadData(pCur, 4, (PBYTE)&header.dwNotUse4, TRUE);
+			pCur = ReadData(pCur, 4, (PBYTE)&header.dwNotUse5, TRUE);
+			pCur = ReadData(pCur, 4, (PBYTE)&header.dwFileLength, TRUE);
+			pCur = ReadData(pCur, 4, (PBYTE)&header.dwVer, FALSE);
+			pCur = ReadData(pCur, 4, (PBYTE)&header.dwSharpType, FALSE);
+			pCur = ReadData(pCur, 8, (PBYTE)&header.dBBXmin, FALSE);
+			pCur = ReadData(pCur, 8, (PBYTE)&header.dBBYmin, FALSE);
+			pCur = ReadData(pCur, 8, (PBYTE)&header.dBBXmax, FALSE);
+			pCur = ReadData(pCur, 8, (PBYTE)&header.dBBYmax, FALSE);
+			pCur = ReadData(pCur, 8, (PBYTE)&header.dBBZmin, FALSE);
+			pCur = ReadData(pCur, 8, (PBYTE)&header.dBBZmax, FALSE);
+			pCur = ReadData(pCur, 8, (PBYTE)&header.dBBMmin, FALSE);
+			pCur = ReadData(pCur, 8, (PBYTE)&header.dBBMmax, FALSE);
+
+			//	レコードデータを読み込む
+			while (ReadFile(hShxFile, byteRecord, sizeof(byteRecord), &dwReadedSize, NULL) && dwReadedSize == sizeof(byteRecord)) {
+				pCur = byteRecord;
+				pCur = ReadData(pCur, 4, (PBYTE)&index.dwRecordOffset, TRUE);
+				pCur = ReadData(pCur, 4, (PBYTE)&index.dwContentsLength, TRUE);
+
+				SetFilePointer(hFile, index.dwRecordOffset*2, NULL, FILE_BEGIN);
+
+				//コンテンツサイズ分読み込む
+				BYTE* pData = (BYTE*)LocalAlloc(LMEM_FIXED, index.dwContentsLength * 2);
+				if (pData != NULL) {
+					ReadFile(hFile, pData, index.dwContentsLength * 2, &dwReadedSize, NULL);
+
+					LocalFree(pData);
+				}
+			}
+
+			CloseHandle(hFile);
+		}
+
+		CloseHandle(hShxFile);
+	}
+}
+
+void CAnalyzeShpDlg::OnBnClickedOk()
+{
+	string strShpFile;
+	string strShxFile;
+
+	strShpFile = DATA_DIR + string("japan_ver81.shp");
+
+	AnalyzeShp(strShpFile);
+	AnalyzeShx(strShxFile,strShpFile);
+
 	// TODO: ここにコントロール通知ハンドラー コードを追加します。
 	CDialogEx::OnOK();
 }

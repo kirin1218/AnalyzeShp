@@ -33,4 +33,7 @@ protected:
 	DECLARE_MESSAGE_MAP()
 public:
 	afx_msg void OnBnClickedOk();
+
+	void AnalyzeShp(string strShpFile);
+	void AnalyzeShx(string strShxFile, string strShpFile);
 };
